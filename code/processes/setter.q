@@ -10,11 +10,7 @@ cacheconfiglocation:.proc.getconfigfile["cacheconfig.json"];
 cacheconfig:.j.k raze read0 hsym first cacheconfiglocation;
 
 // Mode of cache
-main:{[args]
-    isRequest:: first `$(.Q.opt args)[`isRequest]
- };
-
-if[count .z.x; main[.z.x]];
+isrequest: "request" ~ cacheconfig.setter.mode;
 
 detectandwritecache:{ 
     cacheinfo:detectcachetobuild[];
@@ -42,19 +38,21 @@ detectandwritecache:{
     (` sv (dir;stage)) set .z.P
  };
 
-detectcachetobuild:{ 
-    latestcache:{cachename:"MyFirstCache";
-    maincachepath:` sv (hsym `$.setter.cacheconfig.cacheRootDir),`$cachename; 
+detectcachetobuild:{
+    cachename: cacheconfig`cachename;
+    maincachepath:` sv (hsym `$cacheconfig.cacheRootDir),`$cachename; 
     caches:` sv' maincachepath,'(key maincachepath) where (key maincachepath) like cachename,"_*";
+    if[not 0 = count caches; cachewithmaxstarttime:starts ? max starts:cands!{get ` sv x,`start} each cands:key[d] where not `end in/: value d:caches!key each caches];
+
+    latestcache:{
     if[0 = count caches; :`cachename`newcache!(cachename,"_",string .z.P;1b)];
-    cachewithmaxstarttime:starts ? max starts:cands!{get ` sv x,`start} each cands:key[d] where not `end in/: value d:caches!key each caches;
-    if[(not isRequest) and ("N"$.setter.cacheconfig.setter.interval) < .z.P - "P"$@[last "_" vs string cachewithmaxstarttime;13 16 19;:;"::."];:`cachename`newcache!(cachename,"_",string .z.P;1b)];
+    if[(not isRequest) and ("N"$cacheconfig.setter.interval) < .z.P - "P"$@[last "_" vs string cachewithmaxstarttime;13 16 19;:;"::."];:`cachename`newcache!(cachename,"_",string .z.P;1b)];
     :`cachename`newcache!(cachewithmaxstarttime;0b)}[];
 
     if[latestcache[`newcache];writetoken[latestcache[`cachename];`start]];
     if[latestcache[`newcache]; cachewithmaxstarttime:` sv maincachepath,`$latestcache[`cachename]];
 
-    componentcaches:` sv' cachewithmaxstarttime,/:key .setter.cacheconfig.componentCaches;
+    componentcaches:` sv' cachewithmaxstarttime,/:key cacheconfig.componentCaches;
     incompletecomponentcaches:key[d2] where not `end in/: value d2:componentcaches!key each componentcaches;
     writetoken[;`start] each incompletecomponentcaches;
     writetoken[;`setter1] each incompletecomponentcaches;
@@ -63,16 +61,16 @@ detectcachetobuild:{
         argpaths:` sv' maincachepath,'(key maincachepath) where (key maincachepath) like "AsyncCache*";
         maxstarttime:string first max "P"$-1#' "_" vs' string argpaths;
         argwithmaxstarttime:first argpaths where argpaths like "*",maxstarttime;
-        args:: get ` sv argwithmaxstarttime,`args;
-    ]
+        args: get ` sv argwithmaxstarttime,`args
+        ];
     `maincachepath`cachepath`args!(maincachepath;incompletecomponentcaches;args)
  };
 
 generateandwritecache:{[cachepath; args] 
     cachename:last ` vs cachepath;
-    connectiondetails: .anycache.config.componentCaches[cachename].dataSource;
+    connectiondetails: cacheconfig.componentCaches[cachename].dataSource;
     cache: connectiondetails".anycache.sampleanalytic[(::)]";
-    .anymap.writetoanymap[cache;cachepath]
+    .anymap.writetoanymap[cachepath;cache]
  };
 
 cleanupcache:{[cachepath] 
