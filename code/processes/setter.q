@@ -107,7 +107,7 @@ setter.completecache:{[maincachepath]
  };
 
 setter.registertimers:{
-    .timer.repeat[0D00:00:01 + .proc.cp[];0D01:00:00:01 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
+    .timer.repeat[0D00:00:01 + .proc.cp[];0D01:00:01 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
  };
 
 setter.registerconnections:{
