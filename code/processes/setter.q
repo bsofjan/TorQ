@@ -96,8 +96,8 @@ setter.completecache:{[maincachepath]
     latestcache:string last ` vs starts ? max starts:cands!{get ` sv x,`start} each cands:key[d1:caches!key each caches];
     latestcachefilepath: ` sv maincachepath,`$latestcache;
     setter.writetoken[latestcachefilepath;`end];
-    if[not setter.isrequest and not .os.NT; system"ln -sfn ", latestcache, " ", (1_string maincachepath), "/", cachename];
-    if[not setter.isrequest and .os.NT;
+    if[(not setter.isrequest) and not .os.NT; system"ln -sfn ", latestcache, " ", (1_string maincachepath), "/", cachename];
+    if[(not setter.isrequest) and .os.NT;
         target: .os.pth 1_string latestcachefilepath;
         link: .os.pth (1_string maincachepath), "/", cachename;
         system"cmd /c if exist \"", link, "\" rmdir \"", link, "\"";
@@ -107,7 +107,7 @@ setter.completecache:{[maincachepath]
  };
 
 setter.registertimers:{
-    .timer.repeat[0D00:00:15 + .proc.cp[];0D01:00:00:15 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
+    .timer.repeat[0D00:00:01 + .proc.cp[];0D01:00:00:01 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
  };
 
 setter.registerconnections:{
