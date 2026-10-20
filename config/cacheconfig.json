@@ -5,11 +5,13 @@
     "componentcaches":{ 
         "cache1": { 
             "analytic": "analytic1", 
-            "datasource": "rdb" 
+            "datasource": "rdb",
+            "staticmode": "select by sym from trade"
         }, 
         "cache2": { 
             "analytic": "analytic2", 
-            "datasource": "rdb" 
+            "datasource": "rdb",
+            "staticmode": "select by sym from quote"
         } 
     }, 
    "getter":{ 

@@ -2,5 +2,5 @@
 
 \d .servers
 enabled:1b
-CONNECTIONS:enlist `rdb		// Setter connects to the rdb
+CONNECTIONS: `gateway`rdb		// Setter connects to processes
 HOPENTIMEOUT:30000

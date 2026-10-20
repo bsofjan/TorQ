@@ -15,6 +15,7 @@ setter.isrequest: "request" ~ setter.cacheconfig.setter.mode;
 setter.init:{
     // Register timers
     if[not setter.isrequest; setter.registertimers[]];
+    setter.registerconnections[];
  };
 
 setter.detectandwritecache:{ 
@@ -74,7 +75,7 @@ setter.detectcachetobuild:{
 setter.generateandwritecache:{[cachepath; args] 
     cachename:last ` vs cachepath;
     connectiondetails: `$ (setter.cacheconfig.componentcaches[cachename])`datasource;
-    $[setter.isrequest; querydetails: args`query; querydetails: "select by sym from trade"];
+    $[setter.isrequest; querydetails: args`query; querydetails: (setter.cacheconfig.componentcaches[cachename])`staticmode ];
     .servers.startupdepcycles[connectiondetails;3;1];
     connection:.servers.gethandlebytype[connectiondetails;`any];
     cache: connection querydetails;
@@ -107,6 +108,11 @@ setter.completecache:{[maincachepath]
 
 setter.registertimers:{
     .timer.repeat[0D00:00:15 + .proc.cp[];0D01:00:00:15 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
+ };
+
+setter.registerconnections:{
+    .servers.startupdepcycles[`gateway;3;1];
+    gatewayconnection: .servers.gethandlebytype[`gateway;`any];
  };
 
 setter.init[];
