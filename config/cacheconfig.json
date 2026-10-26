@@ -19,7 +19,8 @@
    },
    "setter":{ 
     "mode": "request", 
-    "interval": "0D00:01", 
+    "interval": "0D00:01",
+    "cachestokeep": 3,
     "compression": "16 3 0"
    }
 }
