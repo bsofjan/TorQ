@@ -72,6 +72,11 @@ stopproc:startorstopproc["stop";;processcsv];
   d
  };
 
+// Call setter's read API - what KX Dashboards queries
+.tst.getcache:{setterh(`.anycache.setter.getcache;x)};
+.tst.cachebuilds:{setterh".anycache.setter.cachebuilds[]"};
+.tst.latestcache:{setterh".anycache.setter.latestcache[]"};
+
 // Point the getter (what readers use) at the test caches, and read a component cache the way a reader does
 .anycache.getter.cacheconfig[`cacherootdir]:.tst.root;
 .tst.read:{.anycache.getter.loadcaches[]; get ` sv `.anycache.cache,x};

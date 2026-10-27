@@ -180,6 +180,36 @@ setter.flushcaches:{
     setter.deleteoldcache each ` sv' maincachepath,'key maincachepath
  };
 
+// Read API for KX Dashboards - reads the newest completed build from disk
+
+setter.readtoken:{[dir;stage] $[stage in key dir; get ` sv (dir;stage); 0Np]};
+
+setter.cachebuilds:{
+    // Get cache builds, return newest first
+    maincachepath:` sv (hsym `$setter.cacheconfig.cacherootdir),`$setter.cacheconfig`cachename;
+    builds:(key maincachepath) where (key maincachepath) like setter.cacheconfig[`cachename],"_*";
+    paths:` sv' maincachepath,'builds;
+    `start xdesc ([] build:builds; start:setter.readtoken[;`start] each paths; end:setter.readtoken[;`end] each paths; componentcaches:{", " sv string key[x] except `start`end} each paths)
+ };
+
+setter.latestcache:{
+    //Path of the newest completed main cache build - null if there isn't one yet
+    completed:exec build from setter.cachebuilds[] where not null end;
+    maincachepath:` sv (hsym `$setter.cacheconfig.cacherootdir),`$setter.cacheconfig`cachename;
+    $[count completed; ` sv maincachepath,first completed; `]
+ };
+
+setter.getcache:{[cachename]
+    // Data of a component cache from the newest completed build
+    if[null latest:setter.latestcache[]; '"no completed cache build on disk"];
+    data:get ` sv latest,cachename,`data;
+    $[.Q.qt data; 0!data; data]
+ };
+
+.api.add[`.anycache.setter.getcache;1b;"Data of a component cache from the newest completed build";"[symbol: component cache name, e.g. `cache1]";"table (or whatever the component cache query returned)"];
+.api.add[`.anycache.setter.cachebuilds;1b;"Main cache builds on disk, newest first, with their start and end times and component caches";"[]";"table"];
+.api.add[`.anycache.setter.latestcache;1b;"Path of the newest completed main cache build";"[]";"symbol - null if no build has completed"];
+
 setter.registertimers:{
     .timer.repeat[0D00:00:01 + .proc.cp[];0D01:00:01 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
  };

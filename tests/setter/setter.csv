@@ -283,3 +283,29 @@ true,0,0,q,"(2+rdbh""count trade"")=count get ` sv .tst.latest[],`cache1`data",1
 true,0,0,q,"`GOOG in exec sym from get ` sv .tst.latest[],`cache1`data",1,,Check the hdb-only GOOG trade is included
 true,0,0,q,"(.tst.today-1)=first exec `date$time from get ` sv .tst.latest[],`cache1`data",1,,Check the hdb's rows come first
 true,0,0,q,"(2+rdbh""count quote"")=count get ` sv .tst.latest[],`cache2`data",1,,Check cache2 has the rdb's quotes and the hdb's 2
+
+comment,0,,Read API for KX Dashboards - setter returns the newest completed build
+run,0,0,q,.tst.reset 1b,1,,Clear down and switch setter to request mode - no builds yet
+true,0,0,q,0=count .tst.cachebuilds[],1,,Check no builds are listed
+true,0,0,q,null .tst.latestcache[],1,,Check there is no latest build
+fail,0,0,q,.tst.getcache`cache1,1,,Check reading a cache gives an error - not an empty table
+run,0,0,q,".anycache.getter.requestnewcache .tst.args ""AAPL""",1,,Request a cache for AAPL
+run,0,0,q,.tst.build[],1,,Trigger the build on setter
+run,0,0,q,".anycache.getter.requestnewcache .tst.args ""MSFT""",1,,Request a cache for MSFT
+run,0,0,q,.tst.build[],1,,Trigger the build on setter
+true,0,0,q,(reverse last each ` vs' .tst.builds[])~exec build from .tst.cachebuilds[],1,,Check both builds are listed newest first
+true,0,0,q,all not null exec end from .tst.cachebuilds[],1,,Check both builds have an end time
+true,0,0,q,"all ""cache1, cache2""~/:exec componentcaches from .tst.cachebuilds[]",1,,Check each build lists its component caches
+true,0,0,q,.tst.latest[]~.tst.latestcache[],1,,Check the latest build is the newest one
+true,0,0,q,"(get ` sv .tst.latest[],`cache1`data)~.tst.getcache`cache1",1,,Check cache1 comes from the newest build - the MSFT request
+true,0,0,q,"(get ` sv .tst.latest[],`cache2`data)~.tst.getcache`cache2",1,,Check cache2 comes from the newest build
+run,0,0,q,lastgood:.tst.latest[],1,,Save the newest completed build
+run,0,0,q,".anycache.getter.requestnewcache @[.tst.args ""IBM"";`cache2;:;enlist[`query]!enlist .tst.badquery,.tst.ondate[]]",1,,Request a cache where cache2's query can't run on the rdb
+run,0,0,q,.tst.build[],1,,Trigger the build on setter - it fails and is left without an end time
+true,0,0,q,null first exec end from .tst.cachebuilds[],1,,Check the failed build is listed first with no end time
+true,0,0,q,lastgood~.tst.latestcache[],1,,Check the latest build is still the last completed one
+true,0,0,q,"(get ` sv lastgood,`cache1`data)~.tst.getcache`cache1",1,,Check readers still get the last completed build's data
+run,0,0,q,.tst.reset 0b,1,,Clear down and switch setter to static mode
+run,0,0,q,.tst.build[],1,,Run a static cache build
+true,0,0,q,98h=type .tst.getcache`cache1,1,,Check keyed caches are unkeyed for the dashboard - select by sym is keyed on disk
+true,0,0,q,(0!.tst.read`cache1)~.tst.getcache`cache1,1,,Check it has the same data readers get through the cachename link
