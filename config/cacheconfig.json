@@ -21,6 +21,8 @@
     "mode": "request", 
     "interval": "0D00:01",
     "cachestokeep": 3,
-    "compression": "16 3 0"
+    "compression": "16 3 0",
+    "maxresultmb": 1024,
+    "maxdatespan": 7
    }
 }

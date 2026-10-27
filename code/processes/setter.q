@@ -13,11 +13,18 @@ setter.cacheconfig:.j.k raze read0 hsym first setter.cacheconfiglocation;
 setter.isrequest: "request" ~ setter.cacheconfig.setter.mode;
 
 // Number of main cache builds (and cache requests) to keep on disk in request mode
-setter.cachestokeep:"j"$setter.cacheconfig.setter.cachestokeep;
+setter.cachestokeep:$[`cachestokeep in key setter.cacheconfig`setter; "j"$setter.cacheconfig.setter.cachestokeep; 3];
+
+// Max size in MB of the data a component cache query can return
+setter.maxresultmb:$[`maxresultmb in key setter.cacheconfig`setter; setter.cacheconfig.setter.maxresultmb; 1024];
+
+// Max number of days a request query can cover, counting both ends of its date range
+setter.maxdatespan:$[`maxdatespan in key setter.cacheconfig`setter; "j"$setter.cacheconfig.setter.maxdatespan; 7];
 
 setter.init:{
     // Register timers
     if[not setter.isrequest; setter.registertimers[]];
+    setter.registerflushtimer[];
     setter.registerconnections[];
  };
 
@@ -80,17 +87,52 @@ setter.detectcachetobuild:{
 
 setter.generateandwritecache:{[cachepath; args] 
     cachename:last ` vs cachepath;
-    connectiondetails: `$ (setter.cacheconfig.componentcaches[cachename])`datasource;
+    connectiondetails: $[setter.isrequest; `hdb`rdb; `$trim each "," vs (setter.cacheconfig.componentcaches[cachename])`datasource];
+    if[`rdb`hdb ~ connectiondetails; connectiondetails: `hdb`rdb];
     $[setter.isrequest; querydetails: args`query; querydetails: (setter.cacheconfig.componentcaches[cachename])`staticmode ];
-    .servers.startupdepcycles[connectiondetails;3;1];
-    connection:.servers.gethandlebytype[connectiondetails;`any];
-    .lg.o[`anycache; "requesting data for component cache ",(string cachename)," from ",(string connectiondetails),": ",-3!querydetails];
-    cache: connection querydetails;
+    // Request queries must have a date or date span
+    if[setter.isrequest; if[not setter.checkdates[cachename;querydetails]; :0b]];
+    gateway:.servers.gethandlebytype[`gateway;`any];
+    .lg.o[`anycache; "requesting data for component cache ",(string cachename)," from ",(", " sv string connectiondetails)];
+    cache: setter.querygateway[gateway;querydetails;connectiondetails];
+    //The gateway sends errors back as strings
+    if[10h=type cache;
+        .lg.e[`anycache; "query for component cache ",(string cachename)," failed on the gateway: ",cache];:0b];
+    //Return an error if the cache is over the size limit
+    if[setter.maxresultmb < sizemb:(-22!cache)%1024*1024;
+        .lg.e[`anycache; "result for component cache ",(string cachename)," is ",(string sizemb)," MB, over the maxresultmb of ",(string setter.maxresultmb),", not saving"];:0b];
     // Mock data
     // cache:`a`b`c!(1 2 3; (`d`e!4 5); 6);
     .lg.o[`anycache; "saving data for component cache ",(string cachename)," to ",1_string datapath:` sv cachepath,`data];
     .anymap.writetoanymap[datapath;cache];
     .lg.o[`anycache; "data save completed for component cache ",string cachename];
+    :1b
+ };
+
+setter.querygateway:{[gateway;query;servertypes]
+    neg[gateway](`.gw.asyncexecjpt;query;servertypes;{raze {$[`date in cols x; delete date from x; x]} each x};();0Wn);
+    neg[gateway][];
+    gateway[]
+ };
+
+setter.checkdates:{[cachename;query]
+    //Request queries must be a select or exec, filtering on a single date or a date range of at most maxdatespan days
+    parsed:parse query;
+    if[not (?) ~ first parsed;
+        .lg.e[`anycache; "query for component cache ",(string cachename)," is not a select or exec, not building"];
+        :0b
+        ];
+    constraints:raze parsed 2;
+    constraints:constraints where (first each constraints) in (=;within);
+    dates:raze d where (type each d:last each constraints) in -14 14h;
+    if[not count dates;
+        .lg.e[`anycache; "query for component cache ",(string cachename)," has no date, not building"];
+        :0b
+        ];
+    if[setter.maxdatespan < span:1+(max dates)-min dates;
+        .lg.e[`anycache; "query for component cache ",(string cachename)," spans ",(string span)," days, over the maxdatespan of ",(string setter.maxdatespan),", not building"];
+        :0b
+        ];
     :1b
  };
 
@@ -132,13 +174,22 @@ setter.completecache:{[maincachepath]
     if[not setter.isrequest; setter.deleteoldcache each ` sv' maincachepath,'{x where not x like "asynccache*"} (key maincachepath) except (`$cachename;`$latestcache)]
  };
 
+setter.flushcaches:{
+    //Delete caches every 24 hours
+    maincachepath:` sv (hsym `$setter.cacheconfig.cacherootdir),`$setter.cacheconfig`cachename;
+    setter.deleteoldcache each ` sv' maincachepath,'key maincachepath
+ };
+
 setter.registertimers:{
     .timer.repeat[0D00:00:01 + .proc.cp[];0D01:00:01 + .proc.cp[];"N"$setter.cacheconfig.setter.interval;(`.anycache.setter.detectandwritecache; `);"Running static cachebuilder on a timer"];
  };
 
+setter.registerflushtimer:{
+    .timer.repeat[1D + .proc.cp[];0Wp;1D;(`.anycache.setter.flushcaches; `);"Delete caches every 24 hours"];
+ };
+
 setter.registerconnections:{
     .servers.startupdepcycles[`gateway;3;1];
-    gatewayconnection: .servers.gethandlebytype[`gateway;`any];
  };
 
 setter.init[];

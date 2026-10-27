@@ -1,8 +1,8 @@
-// Settings, mock data and helper functions for the setter tests
+// Settings, mock data and helper functions for the setter tests, including the safety features
 // setter runs as its own proc (testsetter1) - the tests drive it over IPC and check its log files
 
 // IPC connection parameters
-.servers.CONNECTIONS:`rdb`segmentedtickerplant`setter;
+.servers.CONNECTIONS:`rdb`hdb`gateway`segmentedtickerplant`setter;
 .servers.USERPASS:`admin:admin;
 
 // Paths to process CSV and the directory test caches are built in
@@ -76,5 +76,31 @@ stopproc:startorstopproc["stop";;processcsv];
 .anycache.getter.cacheconfig[`cacherootdir]:.tst.root;
 .tst.read:{.anycache.getter.loadcaches[]; get ` sv `.anycache.cache,x};
 
-// Request args for the given sym - requests are made with .anycache.getter.requestnewcache
-.tst.args:{[s] `cache1`cache2!{enlist[`query]!enlist x} each ("select from trade where sym=`",s;"select from quote where sym=`",s)};
+// Date of the mock data - set from the rdb in setter.csv, as the stp timestamps the data when it arrives
+.tst.today:.z.D;
+
+// Where clause for the mock data's date - request queries need a date
+.tst.ondate:{" where time.date=",string .tst.today};
+
+// Request args with the same where clause for both component caches - requests are made with .anycache.getter.requestnewcache
+.tst.where:{[filter] `cache1`cache2!{enlist[`query]!enlist x} each ("select from trade",filter;"select from quote",filter)};
+
+// Request args for the given sym on the mock data's date
+.tst.args:{[s] .tst.where .tst.ondate[],", sym=`",s};
+
+// Request args for a range of the given number of days, ending on the mock data's date
+.tst.within:{[days] .tst.where " where time.date within ",-3!.tst.today-(days-1),0};
+
+// Check if the latest main cache build completed
+.tst.complete:{`end in key .tst.latest[]};
+
+// Build a one-day test hdb for yesterday with the rdb's schema in the folder testhdb1 started on - setter.csv then reloads testhdb1
+// AAPL is older than the rdb's AAPL, and GOOG is only in the hdb, so tests can tell which source each row came from
+// The stp stamps data in GMT (datatimezone), so yesterday is by the GMT date
+.tst.mkhdb:{
+  dir:hsym `$testpath,"tmphdb";
+  d:.z.d-1;
+  t:([]time:d+0D10:00 0D11:00;sym:`AAPL`GOOG;price:90 500f;size:1 2i;stop:00b;cond:"  ";ex:"NN";side:`buy`sell);
+  q:([]time:d+0D10:00 0D11:00;sym:`AAPL`GOOG;bid:89 499f;ask:91 501f;bsize:1 2;asize:3 4;mode:"RR";ex:"NN";src:`src1`src1);
+  {[dir;d;n;t] (` sv dir,(`$string d),n,`) set .Q.en[dir;t]}[dir;d]'[`trade`quote;(t;q)];
+ };

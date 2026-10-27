@@ -6,8 +6,10 @@ source $KDBTESTS/flagparse.sh
 # Path to test directory
 testpath=${KDBTESTS}/setter
 
-# Procs setter needs
-procs="testdiscovery1 teststp1 testrdb1 testgateway1"
+# Procs setter needs - the gateway queries the rdb and a one-day test hdb
+# testhdb1 starts before the gateway so the gateway finds it, on an empty folder the tests fill in and reload
+procs="testdiscovery1 teststp1 testrdb1 testhdb1 testgateway1"
+mkdir -p ${testpath}/tmphdb
 
 # Start procs
 ${TORQHOME}/torq.sh start ${procs} -csv ${testpath}/process.csv
@@ -28,4 +30,4 @@ ${RLWRAP} q ${TORQHOME}/torq.q \
 
 # Shut down procs and remove anything the tests wrote to disk
 ${TORQHOME}/torq.sh stop ${procs} testsetter1 -csv ${testpath}/process.csv
-rm -rf ${testpath}/tmpcache ${testpath}/tmptplogs
+rm -rf ${testpath}/tmpcache ${testpath}/tmptplogs ${testpath}/tmphdb
