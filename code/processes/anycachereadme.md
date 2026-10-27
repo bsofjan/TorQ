@@ -1,5 +1,112 @@
 AnyCache README
 
+AnyCache is a caching system meant to be deployed alongside an existing kdb+/q setup. Anycache runs queries on a schedule (static mode) or on request (request mode), saves the results to disk, and lets any process or KX Dashboards read them.
+
+## Architecture
+
+Setter builds on a timer (when in static mode) or when triggered (when in request mode). Setter takes in configuration from the `cacheconfig.json`, and queries the gateway to get the data it builds its caches from. Every main cache can be made up of multiple component caches, which can be specified in the `cacheconfig.json`.
+
+```
+  feed -> stp -> rdb ------------+
+           |                     |
+           +-> wdb -> hdb -------+
+                                 |
+                              gateway        joins hdb and rdb results
+                                 ^
+                                 | queries
+  cacheconfig.json --------->  setter        builds on a timer (static) or when triggered (request)
+                                 |
+                                 | writes builds, reads requests
+                                 v
+  <cacherootdir>/<cachename>/
+    <cachename>_<timestamp>/     one build: start and end times, one folder per component cache
+      cache1/data                anymap file(s)
+    <cachename>                  symlink to the newest build (static mode)
+    asynccache_<timestamp>/args  a cache request (request mode)
+
+  KX Dashboards ---> setter      .anycache.setter.getcache / .anycache.setter.cachebuilds
+```
+
+## Install
+
+To install, run `demosetup.sh`.
+
+It pulls the TorQ Finance Starter Pack, then lays TorQ on top with the anycache system.
+
+demosetup script:
+```bash
+mkdir "anycachedemo"
+cd "anycachedemo"
+git clone "https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack" "."
+mkdir "temp"
+cd "temp"
+git clone -b "anycache" "https://github.com/bsofjan/TorQ.git" "."
+cp -a "." ".."
+cd ".."
+rm -rf "temp"
+rm -rf ".git"
+```
+
+Then in `setenv.sh` set `KDBX` to your KDB-X (5.0) binary and, if needed, `KDBBASEPORT`, and start everything:
+
+```bash
+./torq.sh start all
+./torq.sh summary
+```
+
+`setter1` starts with the rest, on port `KDBBASEPORT+24`.
+
+## Configure
+
+Setter reads `cacheconfig.json`.
+
+| Field | Meaning |
+|---|---|
+| `cacherootdir` | Folder the caches are written to |
+| `cachename` | Name of the cache, used for folder names |
+| `asyncprocessname` | Folder prefix for cache requests |
+| `componentcaches.<name>.staticmode` | Query run for that component cache in static mode |
+| `componentcaches.<name>.datasource` | Where static mode queries run eg `rdb` |
+| `setter.mode` | `request` for request mode, anything else (eg `static`) for static mode |
+| `setter.interval` | Static mode: time between builds, eg `0D00:01` |
+| `setter.cachestokeep` | Request mode: builds and requests kept on disk |
+| `setter.maxresultmb` | Largest result saved, in MB |
+| `setter.maxdatespan` | Request mode: most days a query can cover |
+
+Config is read when a process starts, so restart setter after a change:
+
+```bash
+./torq.sh stop setter1 && ./torq.sh start setter1
+```
+
+## Running setter
+
+Both modes delete all caches and requests every 24 hours.
+
+### Static mode
+
+Set `"mode": "static"` and an `interval`. Every interval setter runs each component cache's `staticmode` query through the gateway and saves a new build. When the build completes, the `<cachename>` symlink moves to it and older builds are deleted.
+
+### Request mode
+
+Set `"mode": "request"`. There is no timer: a user asks for a cache, then setter builds it when triggered.
+
+1. From any TorQ process, write a request with one query per component cache:
+
+```q
+Save down an arg file in the <asyncprocessname> folder for the request mode of the Anycache system.
+```
+
+2. Trigger the build on setter, then read the result:
+
+```q
+h:hopen `:setterhost:setterport:user:password;
+(neg h)".anycache.setter.detectandwritecache[]"
+```
+
+Request queries must be a select or exec that filters on a date with `=` or `within`, covering at most `maxdatespan` days.
+Results over `maxresultmb` are not saved, and only the last `cachestokeep` builds and requests are kept.
+
 ## KDB-X Dashboard
 
 Setter exposes the newest completed cache build over IPC:
