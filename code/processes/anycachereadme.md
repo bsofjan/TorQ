@@ -27,6 +27,15 @@ Setter builds on a timer (when in static mode) or when triggered (when in reques
   KX Dashboards ---> setter      .anycache.setter.getcache / .anycache.setter.cachebuilds
 ```
 
+## Processes
+
+| Process | Role in AnyCache |
+|---|---|
+| `setter` | Builds the caches and writes them to disk. Reads `cacheconfig.json`, sends its queries to the gateway, and serves the cache to the dashboard. Code: `code/processes/setter.q`. |
+| `gateway` | Receives and runs setter's queries and returns the results. |
+| TorQ processes | Loads `code/common/getter.q`, which allows it to read static builds and write cache requests. |
+| KX Dashboard | A separate q process that connects to setter and polls its read API. |
+
 ## Install
 
 To install, run `demosetup.sh`.
@@ -73,6 +82,39 @@ Setter reads `cacheconfig.json`.
 | `setter.maxresultmb` | Largest result saved, in MB |
 | `setter.maxdatespan` | Request mode: most days a query can cover |
 
+Example `cacheconfig.json`:
+
+```json
+{
+    "cacherootdir": "/path/to/anycachedata",
+    "cachename": "myfirstcache",
+    "asyncprocessname": "asynccache",
+    "componentcaches":{
+        "cache1": {
+            "analytic": "analytic1",
+            "datasource": "rdb",
+            "staticmode": "select by sym from trade"
+        },
+        "cache2": {
+            "analytic": "analytic2",
+            "datasource": "rdb",
+            "staticmode": "select by sym from quote"
+        }
+    },
+   "getter":{
+    "interval": "0D00:05"
+   },
+   "setter":{
+    "mode": "request",
+    "interval": "0D00:01",
+    "cachestokeep": 3,
+    "compression": "16 3 0",
+    "maxresultmb": 1024,
+    "maxdatespan": 7
+   }
+}
+```
+
 Config is read when a process starts, so restart setter after a change:
 
 ```bash
@@ -107,7 +149,7 @@ h:hopen `:setterhost:setterport:user:password;
 Request queries must be a select or exec that filters on a date with `=` or `within`, covering at most `maxdatespan` days.
 Results over `maxresultmb` are not saved, and only the last `cachestokeep` builds and requests are kept.
 
-## KDB-X Dashboard
+## KX Dashboard
 
 Setter exposes the newest completed cache build over IPC:
 
