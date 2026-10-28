@@ -110,26 +110,35 @@ setter.generateandwritecache:{[cachepath; args]
  };
 
 setter.querygateway:{[gateway;query;servertypes]
-    neg[gateway](`.gw.asyncexecjpt;query;servertypes;{raze {$[`date in cols x; delete date from x; x]} each x};();0Wn);
-    neg[gateway][];
-    gateway[]
+    results:{[gateway;query;servertype]
+        if[`rdb~servertype; query:ssr[query;" date ";" time.date "]];
+        //Send the query to the gateway asynchronously and flush it, then wait for the gateway's reply
+        neg[gateway](`.gw.asyncexecjpt;query;enlist servertype;raze;();0Wn);
+        neg[gateway][];
+        gateway[]}[gateway;query] each servertypes;
+    if[any errors:10h=type each results; :first results where errors];
+    raze {$[`date in cols x; delete date from x; x]} each results
  };
 
 setter.checkdates:{[cachename;query]
-    //Request queries must be a select or exec, filtering on a single date or a date range of at most maxdatespan days
+    //Request queries must be a select or exec, filtering on a date or a date range of at most maxdatespan days
+    if[(not query like "* where date in *") and (not query like "* where date = *") and (not query like "* where date within *");
+        .lg.e[`anycache; "query for component cache ",(string cachename)," does not filter on a date first, not building"];
+        :0b
+    ];
     parsed:parse query;
     if[not (?) ~ first parsed;
         .lg.e[`anycache; "query for component cache ",(string cachename)," is not a select or exec, not building"];
         :0b
         ];
     constraints:raze parsed 2;
-    constraints:constraints where (first each constraints) in (=;within);
+    constraints:constraints where (first each constraints) in (=;within;in);
     dates:raze d where (type each d:last each constraints) in -14 14h;
     if[not count dates;
         .lg.e[`anycache; "query for component cache ",(string cachename)," has no date, not building"];
         :0b
         ];
-    if[setter.maxdatespan < span:1+(max dates)-min dates;
+    if[(setter.maxdatespan < span:1+(max dates)-min dates) or (setter.maxdatespan < count dates);
         .lg.e[`anycache; "query for component cache ",(string cachename)," spans ",(string span)," days, over the maxdatespan of ",(string setter.maxdatespan),", not building"];
         :0b
         ];

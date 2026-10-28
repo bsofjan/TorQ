@@ -72,6 +72,9 @@ stopproc:startorstopproc["stop";;processcsv];
   d
  };
 
+// A proc's usage log records the queries it runs - used to check the hdb is sent date and the rdb time.date
+.tst.usagelog:{[proc] read0 hsym `$getenv[`KDBLOG],"/usage_",(string proc),".log"};
+
 // Call setter's read API - what KX Dashboards queries
 .tst.getcache:{setterh(`.anycache.setter.getcache;x)};
 .tst.cachebuilds:{setterh".anycache.setter.cachebuilds[]"};
@@ -85,7 +88,7 @@ stopproc:startorstopproc["stop";;processcsv];
 .tst.today:.z.D;
 
 // Where clause for the mock data's date - request queries need a date
-.tst.ondate:{" where time.date=",string .tst.today};
+.tst.ondate:{" where date in ",string .tst.today};
 
 // Request args with the same where clause for both component caches - requests are made with .anycache.getter.requestnewcache
 .tst.where:{[filter] `cache1`cache2!{enlist[`query]!enlist x} each ("select from trade",filter;"select from quote",filter)};
@@ -94,7 +97,7 @@ stopproc:startorstopproc["stop";;processcsv];
 .tst.args:{[s] .tst.where .tst.ondate[],", sym=`",s};
 
 // Request args for a range of the given number of days, ending on the mock data's date
-.tst.within:{[days] .tst.where " where time.date within ",-3!.tst.today-(days-1),0};
+.tst.within:{[days] .tst.where " where date within ",-3!.tst.today-(days-1),0};
 
 // Check if the latest main cache build completed
 .tst.complete:{`end in key .tst.latest[]};
