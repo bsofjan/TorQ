@@ -115,6 +115,8 @@ Example `cacheconfig.json`:
 }
 ```
 
+Pay extra care to the `cacherootdir` and `setter.mode` field in `cacheconfig.json` as you will need to update these.
+
 Config is read when a process starts, so restart setter after a change:
 
 ```bash
@@ -129,17 +131,32 @@ Both modes delete all caches and requests every 24 hours.
 
 Set `"mode": "static"` and an `interval`. Every interval setter runs each component cache's `staticmode` query through the gateway and saves a new build. When the build completes, the `<cachename>` symlink moves to it and older builds are deleted.
 
+Read the newest static cache build from any TorQ process. Each component cache is loaded into `.anycache.cache.<name>`:
+
+```q
+q).anycache.getter.loadcaches[]
+q).anycache.cache.cache1
+sym | time                          price size stop cond ex side
+----| ----------------------------------------------------------
+AAPL| 2026.10.28D11:42:28.096582000 72.95 86   0         N  buy 
+AIG | 2026.10.28D11:42:28.096582000 34.84 47   0    K    O  sell
+AMD | 2026.10.28D11:42:27.296632000 33.26 9    0    N    N  sell
+```
+
 ### Request mode
 
 Set `"mode": "request"`. There is no timer: a user asks for a cache, then setter builds it when triggered.
 
-1. From any TorQ process, write a request with one query per component cache:
+1. From any TorQ process, write a request with one query per component cache. It is saved as an args file in an `<asyncprocessname>_<timestamp>` folder:
 
 ```q
-Save down an arg file in the <asyncprocessname> folder for the request mode of the Anycache system.
+q)q1:"select from trade where date = 2026.10.28, sym=`AAPL"
+q)q2:"select from quote where date = 2026.10.28, sym=`AAPL"
+q).anycache.getter.requestnewcache `cache1`cache2!{enlist[`query]!enlist x} each (q1;q2)
+`:<cacherootdir>/myfirstcache/asynccache_2026.10.28D09:35:57.161384000/args
 ```
 
-2. Trigger the build on setter, then read the result:
+2. Trigger the build on setter. It builds the newest request:
 
 ```q
 h:hopen `:setterhost:setterport:user:password;
