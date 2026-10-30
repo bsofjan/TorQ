@@ -1,6 +1,6 @@
 AnyCache README
 
-AnyCache is a caching system meant to be deployed alongside an existing kdb+/q setup. Anycache runs queries on a schedule (static mode) or on request (request mode), saves the results to disk, and lets any process or KX Dashboards read them.
+AnyCache is a caching system meant to be deployed alongside an existing kdb+/q setup. The inspiration came from a recurring client need for a caching system. Anycache runs queries on a schedule (static mode) or on request (request mode), saves the results to disk, and lets any process or KX Dashboards read them.
 
 ## Architecture
 
@@ -166,6 +166,82 @@ h:hopen `:setterhost:setterport:user:password;
 Request queries must be a select or exec that filters on a date with `=` or `within`, covering at most `maxdatespan` days.
 Results over `maxresultmb` are not saved, and only the last `cachestokeep` builds and requests are kept.
 
+## APIs
+
+Examples of APIs below with three mock trades and quotes. Paths start with your `cacherootdir`.
+
+### Getter: any TorQ process
+
+`.anycache.getter.loadcaches[]` loads the newest static build into `.anycache.cache.<name>`, one variable per component cache. Static mode only, as it reads through the `<cachename>` symlink.
+
+```q
+q).anycache.getter.loadcaches[]
+q).anycache.cache.cache2
+sym  time                          bid   ask   bsize asize mode ex src  
+------------------------------------------------------------------------
+AAPL 2026.10.28D11:31:43.521507000 78.28 79.37 131   99    B    N  DB   
+AIG  2026.10.28D11:31:43.521507000 33.24 34.85 41    77    A    O  GETGO
+AMD  2026.10.28D11:31:40.321631000 33.84 35.02 100   72    Z    N  GETGO
+```
+
+`.anycache.getter.requestnewcache[args]` saves a cache request for request mode. `args` maps each component cache to a dictionary with its `query`. It returns the path of the saved args file.
+
+```q
+q)q1:"select from trade where date = 2026.10.28, sym=`AAPL"
+q)q2:"select from quote where date = 2026.10.28, sym=`AAPL"
+q).anycache.getter.requestnewcache `cache1`cache2!{enlist[`query]!enlist x} each (q1;q2)
+`:<cacherootdir>/myfirstcache/asynccache_2026.10.28D09:35:57.161384000/args
+```
+
+### Setter: on setter, or over IPC
+
+`.anycache.setter.detectandwritecache[]` builds the caches now. In static mode it is what the timer runs. In request mode it builds the newest request. The setter's log shows each step:
+
+```q
+q).anycache.setter.detectandwritecache[]
+```
+```
+starting new main cache build <cacherootdir>/myfirstcache/myfirstcache_2026.10.28D09:42:28.548395000
+component caches to build: cache1, cache2
+requesting data for component cache cache1 from rdb
+saving data for component cache cache1 to <cacherootdir>/myfirstcache/myfirstcache_2026.10.28D09:42:28.548395000/cache1/data
+data save completed for component cache cache1
+main cache build completed <cacherootdir>/myfirstcache/myfirstcache_2026.10.28D09:42:28.548395000
+```
+
+`.anycache.setter.getcache[name]` returns a component cache from the newest completed build.
+
+```q
+q).anycache.setter.getcache[`cache2]
+sym  time                          bid   ask   bsize asize mode ex src  
+------------------------------------------------------------------------
+AAPL 2026.10.28D11:42:28.496662000 72.65 73.42 48    80    B    N  GETGO
+AIG  2026.10.28D11:42:27.696826000 34.54 35.08 97    49    Z    O  SUN  
+AMD  2026.10.28D11:42:27.696826000 32.43 33.55 158   136   N    N  BARX
+```
+
+`.anycache.setter.cachebuilds[]` returns one row per build on disk, newest first. A build without an `end` time is still running or failed.
+
+```q
+q).anycache.setter.cachebuilds[]
+build                                      start                         end                           componentcaches 
+-----------------------------------------------------------------------------------------------------------------------
+myfirstcache_2026.10.28D09:42:28.548395000 2026.10.28D09:42:28.548419000 2026.10.28D09:42:28.578025000 "cache1, cache2"
+```
+
+`.anycache.setter.latestcache[]` returns the path of the newest completed build.
+
+```q
+q).anycache.setter.latestcache[]
+`:<cacherootdir>/myfirstcache/myfirstcache_2026.10.28D09:42:28.548395000
+```
+
+`.anycache.setter.flushcaches[]` deletes every build and request. Setter runs it every 24 hours.
+
+```q
+q).anycache.setter.flushcaches[]
+```
+
 ## KX Dashboard
 
 Setter exposes the newest completed cache build over IPC:
@@ -185,3 +261,8 @@ KX Dashboards connects to setter.
 3. Add a third data source for the cache builds and show it in a Data Grid:
 
        .anycache.setter.cachebuilds[]
+
+## Future work
+
+- **Make AnyCache a KDB-X module.** Setter and getter run inside TorQ today. As a KDB-X module, AnyCache could be loaded into any KDB-X process.
+- **Accept functional selects as well as qsql.** Request queries must be qsql strings today. The main change is to make setter able to accept functional selects.
